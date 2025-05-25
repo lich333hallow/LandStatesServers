@@ -8,7 +8,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import ru.lich333hallow.LandStatesServer.models.LobbyModel;
 import ru.lich333hallow.LandStatesServer.models.PlayerModel;
 import ru.lich333hallow.LandStatesServer.states.LobbyState;
-import ru.lich333hallow.LandStatesServer.models.WebSocketMessage;
+import ru.lich333hallow.LandStatesServer.models.WebSocketMessageLobby;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -33,16 +33,16 @@ public class LobbyHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         sessions.remove(session);
-        broadcastLobbyState("LOBBY_STATE");
+        sendLobbyState(session, "LOBBY_STATE");
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        WebSocketMessage wsMessage;
+        WebSocketMessageLobby wsMessage;
 
 
         try {
-            wsMessage = objectMapper.readValue(message.getPayload(), WebSocketMessage.class);
+            wsMessage = objectMapper.readValue(message.getPayload(), WebSocketMessageLobby.class);
         } catch (IOException e) {
             session.sendMessage(new TextMessage("{\"error\":\"Invalid JSON format\"}"));
             return;
@@ -92,7 +92,7 @@ public class LobbyHandler extends TextWebSocketHandler {
         }
     }
 
-    private void handleJoinMessage(WebSocketSession session, WebSocketMessage message, boolean create) throws IOException {
+    private void handleJoinMessage(WebSocketSession session, WebSocketMessageLobby message, boolean create) throws IOException {
         if (create){
             lobbies.add(new LobbyModel(message.getLobbyId(), Integer.parseInt(message.getNumberOfPlayers()), new ArrayList<>()));
         }
@@ -100,10 +100,10 @@ public class LobbyHandler extends TextWebSocketHandler {
         PlayerModel player = new PlayerModel(session.getId(), message.getPlayerName());
         player.setName(message.getPlayerName());
         lobbies.stream().filter(l -> l.getLobbyId().equals(message.getLobbyId())).findFirst().ifPresent(l -> l.getPlayers().add(player));
-        broadcastLobbyState("LOBBY_STATE");
+        broadcastLobbyState("LOBBY_STATE", message.getLobbyId());
     }
 
-    private void handleReadyMessage(WebSocketSession session, WebSocketMessage message) throws IOException {
+    private void handleReadyMessage(WebSocketSession session, WebSocketMessageLobby message) throws IOException {
         lobbies.stream()
                 .filter(l -> l.getLobbyId().equals(message.getLobbyId()))
                 .findFirst().flatMap(l -> l.getPlayers().stream()
@@ -116,10 +116,10 @@ public class LobbyHandler extends TextWebSocketHandler {
                         throw new RuntimeException(e);
                     }
                 });
-        broadcastLobbyState("LOBBY_STATE");
+        broadcastLobbyState("LOBBY_STATE", message.getLobbyId());
     }
 
-    private void handleDisconnectedMessage(WebSocketSession session, WebSocketMessage message) throws IOException {
+    private void handleDisconnectedMessage(WebSocketSession session, WebSocketMessageLobby message) throws IOException {
         lobbies.stream()
                 .filter(l -> l.getLobbyId().equals(message.getLobbyId()))
                 .findFirst()
@@ -134,7 +134,7 @@ public class LobbyHandler extends TextWebSocketHandler {
                         lobbies.remove(lobby);
                     }
                     try {
-                        broadcastLobbyState("PLAYER_DISCONNECTED");
+                        broadcastLobbyState("PLAYER_DISCONNECTED", lobby.getLobbyId());
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
@@ -185,8 +185,11 @@ public class LobbyHandler extends TextWebSocketHandler {
         }
     }
 
-    private void broadcastLobbyState(String type) throws IOException {
+    private void broadcastLobbyState(String type, String id) throws IOException {
         for (LobbyModel lobby : lobbies) {
+            if(!lobby.getLobbyId().equals(id)){
+                continue;
+            }
             String lobbyState = objectMapper.writeValueAsString(
                     new LobbyState(type, lobby.getLobbyId(), lobby.getPlayers())
             );

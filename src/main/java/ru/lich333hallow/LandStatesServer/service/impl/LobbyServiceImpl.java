@@ -44,19 +44,19 @@ public class LobbyServiceImpl implements LobbyService {
     @Override
     public LobbyDTO createLobby(LobbyRegisterDTO registerDTO) {
 
-        Lobby lobby = new Lobby();
+        Lobby lobbyModel = new Lobby();
 
-        lobby.setLobbyName(registerDTO.getLobbyName());
-        lobby.setLobbyId(UUID.randomUUID().toString());
-        lobby.setPlayerDTOS(registerDTO.getPlayerDTOS());
-        lobby.setTimeInSeconds(registerDTO.getTimeInSeconds());
-        lobby.setNumberOfPlayers(registerDTO.getNumberOfPlayers());
-        lobby.setActive(true);
-        lobby.setHostId(registerDTO.getHostId());
-        lobby.setHostName(playerRepository.findPlayerByPlayerId(lobby.getHostId()).getName());
-        lobby.setNowPlayers(1);
+        lobbyModel.setLobbyName(registerDTO.getLobbyName());
+        lobbyModel.setLobbyId(UUID.randomUUID().toString());
+        lobbyModel.setPlayerDTOS(registerDTO.getPlayerDTOS());
+        lobbyModel.setTimeInSeconds(registerDTO.getTimeInSeconds());
+        lobbyModel.setNumberOfPlayers(registerDTO.getNumberOfPlayers());
+        lobbyModel.setActive(true);
+        lobbyModel.setHostId(registerDTO.getHostId());
+        lobbyModel.setHostName(playerRepository.findPlayerByPlayerId(lobbyModel.getHostId()).getName());
+        lobbyModel.setNowPlayers(1);
 
-        return LobbyMapper.convertToLobby(lobbyRepository.save(lobby));
+        return LobbyMapper.convertToLobby(lobbyRepository.save(lobbyModel));
     }
 
     @Override
@@ -79,18 +79,18 @@ public class LobbyServiceImpl implements LobbyService {
 
     @Override
     public LobbyDTO updateLobby(String id, LobbyDTO lobbyDTO) {
-        Lobby lobby = lobbyRepository.findByLobbyId(id).orElseThrow(() -> new LobbyExceptionNotFound("Lobby not found!"));
+        Lobby lobbyModel = lobbyRepository.findByLobbyId(id).orElseThrow(() -> new LobbyExceptionNotFound("Lobby not found!"));
 
-        lobby.setLobbyName(lobbyDTO.getLobbyName());
-        lobby.setTimeInSeconds(lobbyDTO.getTimeInSeconds());
-        lobby.setHostId(lobbyDTO.getHostId());
-        lobby.setPlayerDTOS(lobbyDTO.getPlayerDTOS());
-        lobby.setNumberOfPlayers(lobbyDTO.getNumberOfPlayers());
-        lobby.setHostName(lobbyDTO.getHostName());
+        lobbyModel.setLobbyName(lobbyDTO.getLobbyName());
+        lobbyModel.setTimeInSeconds(lobbyDTO.getTimeInSeconds());
+        lobbyModel.setHostId(lobbyDTO.getHostId());
+        lobbyModel.setPlayerDTOS(lobbyDTO.getPlayerDTOS());
+        lobbyModel.setNumberOfPlayers(lobbyDTO.getNumberOfPlayers());
+        lobbyModel.setHostName(lobbyDTO.getHostName());
 
-        lobby.setNowPlayers(lobbyDTO.getNowPlayers());
-        lobby.setActive(lobby.getNowPlayers() != lobby.getNumberOfPlayers() || lobby.getNowPlayers() == 0);
+        lobbyModel.setNowPlayers(lobbyDTO.getNowPlayers());
+        lobbyModel.setActive(lobbyModel.getNowPlayers() != lobbyModel.getNumberOfPlayers() || lobbyModel.getNowPlayers() == 0);
 
-        return LobbyMapper.convertToLobby(lobbyRepository.save(lobby));
+        return LobbyMapper.convertToLobby(lobbyRepository.save(lobbyModel));
     }
 }

@@ -21,11 +21,11 @@ public class PlayerServiceImpl implements PlayerService {
     @Override
     public PlayerDTO createPlayer(PlayerDTO playerDTO) {
 
-        Player player = new Player();
+        Player playerModel = new Player();
 
-        player.setPlayerId(playerDTO.getPlayerId());
-        player.setName(playerDTO.getName());
+        playerModel.setPlayerId(playerDTO.getPlayerId());
+        playerModel.setName(playerDTO.getName());
 
-        return PlayerMapper.convertToPlayer(playerRepository.save(player));
+        return PlayerMapper.convertToPlayer(playerRepository.save(playerModel));
     }
 }

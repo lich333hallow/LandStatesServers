@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class WebSocketMessage {
+public class WebSocketMessageLobby {
     private String type;
     private String playerName;
     private String numberOfPlayers;

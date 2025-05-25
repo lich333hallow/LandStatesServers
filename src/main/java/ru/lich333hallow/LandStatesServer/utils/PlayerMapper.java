@@ -6,11 +6,11 @@ import ru.lich333hallow.LandStatesServer.entity.Player;
 
 @UtilityClass
 public class PlayerMapper {
-    public PlayerDTO convertToPlayer(Player player){
+    public PlayerDTO convertToPlayer(Player playerModel){
         PlayerDTO playerDTO = new PlayerDTO();
 
-        playerDTO.setName(player.getName());
-        playerDTO.setPlayerId(player.getPlayerId());
+        playerDTO.setName(playerModel.getName());
+        playerDTO.setPlayerId(playerModel.getPlayerId());
 
         return playerDTO;
     }

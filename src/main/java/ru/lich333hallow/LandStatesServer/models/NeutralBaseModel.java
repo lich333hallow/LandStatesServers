@@ -4,12 +4,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class GameModel {
-    private String id;
-    private List<PlayerModelInGame> players;
+public class NeutralBaseModel {
+    private int warriors;
 }

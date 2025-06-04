@@ -56,18 +56,10 @@ public class LobbyHandler extends TextWebSocketHandler {
         try {
             switch (wsMessage.getType()) {
                 case "JOIN":
-                    if (wsMessage.getLobbyId() == null || wsMessage.getLobbyId().isEmpty()|| wsMessage.getNumberOfPlayers() == null) {
-                        session.sendMessage(new TextMessage("{\"error\":\"Lobby ID required for JOIN\"}"));
-                        return;
-                    }
                     handleJoinMessage(session, wsMessage, false);
                     break;
 
                 case "READY":
-                    if (wsMessage.getLobbyId() == null || wsMessage.getLobbyId().isEmpty() || wsMessage.getNumberOfPlayers() == null) {
-                        session.sendMessage(new TextMessage("{\"error\":\"Lobby ID required for READY\"}"));
-                        return;
-                    }
                     handleReadyMessage(session, wsMessage);
                     break;
 
@@ -97,10 +89,10 @@ public class LobbyHandler extends TextWebSocketHandler {
             lobbies.add(new LobbyModel(message.getLobbyId(), Integer.parseInt(message.getNumberOfPlayers()), new ArrayList<>()));
         }
 
-        PlayerModel player = new PlayerModel(session.getId(), message.getPlayerName());
+        PlayerModel player = new PlayerModel(session.getId(), message.getPlayerName(), message.getColor());
         player.setName(message.getPlayerName());
         lobbies.stream().filter(l -> l.getLobbyId().equals(message.getLobbyId())).findFirst().ifPresent(l -> l.getPlayers().add(player));
-        broadcastLobbyState("LOBBY_STATE", message.getLobbyId());
+        broadcastLobbyState("JOIN", message.getLobbyId());
     }
 
     private void handleReadyMessage(WebSocketSession session, WebSocketMessageLobby message) throws IOException {
@@ -134,7 +126,7 @@ public class LobbyHandler extends TextWebSocketHandler {
                         lobbies.remove(lobby);
                     }
                     try {
-                        broadcastLobbyState("PLAYER_DISCONNECTED", lobby.getLobbyId());
+                        broadcastLobbyState("DISCONNECTED", lobby.getLobbyId());
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }

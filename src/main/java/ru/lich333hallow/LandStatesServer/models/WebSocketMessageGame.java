@@ -14,10 +14,8 @@ import java.util.List;
 public class WebSocketMessageGame {
     private String type;
     private String lobbyId;
-    private String name;
-    private String target;
-    private String balance;
-    private String miners;
-    private String defenders;
-    private String bases;
+    private PlayerModelInGame player;
+    private PlayerModelInGame target;
+    private int gameTime;
+    private State state;
 }

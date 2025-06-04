@@ -4,16 +4,15 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class PlayerModelInGame {
-    private String sessionId;
     private String name;
-    private String number;
+    private int number;
+    private String color;
     private int balance;
-    private int miners;
-    private int defenders;
-    private int bases;
-    private int warriors;
+    private List<State> bases;
 }

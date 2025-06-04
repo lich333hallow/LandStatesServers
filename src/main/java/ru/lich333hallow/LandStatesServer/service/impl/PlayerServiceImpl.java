@@ -25,6 +25,7 @@ public class PlayerServiceImpl implements PlayerService {
 
         playerModel.setPlayerId(playerDTO.getPlayerId());
         playerModel.setName(playerDTO.getName());
+        playerModel.setColor(playerDTO.getColor());
 
         return PlayerMapper.convertToPlayer(playerRepository.save(playerModel));
     }

@@ -13,6 +13,7 @@ public class WebSocketMessageLobby {
     private String type;
     private String playerName;
     private String numberOfPlayers;
+    private String color;
     private Boolean ready;
     private String lobbyId;
 }

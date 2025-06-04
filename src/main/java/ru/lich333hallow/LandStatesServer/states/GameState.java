@@ -15,5 +15,4 @@ public class GameState {
     private String type;
     private String lobbyId;
     private PlayerModelInGame playerModelInGame;
-    private List<PlayerModelInGame> playerModelInGames;
 }

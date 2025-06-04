@@ -1,16 +1,15 @@
-package ru.lich333hallow.LandStatesServer.models;
+package ru.lich333hallow.LandStatesServer.states;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import ru.lich333hallow.LandStatesServer.models.PlayerModelInGame;
 
 import java.util.List;
 
 @Data
 @AllArgsConstructor
-@NoArgsConstructor
-public class GameModel {
-    private String id;
+public class WinnerState {
+    private String type;
     private List<PlayerModelInGame> players;
-    private int gameTime;
 }

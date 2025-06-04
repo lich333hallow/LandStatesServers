@@ -10,15 +10,12 @@ import lombok.NoArgsConstructor;
 public class PlayerModel {
     private String sessionId;
     private String name;
+    private String color;
     private boolean ready;
 
-    public PlayerModel(String sessionId, String name){
+    public PlayerModel(String sessionId, String name, String color){
         this.name = name;
         this.sessionId = sessionId;
-    }
-
-    public PlayerModel(String name, boolean ready){
-        this.name = name;
-        this.ready = ready;
+        this.color = color;
     }
 }

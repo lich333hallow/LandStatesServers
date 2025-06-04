@@ -1,5 +1,6 @@
 package ru.lich333hallow.LandStatesServer.configs;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.*;
@@ -14,6 +15,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        objectMapper.configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true);
         registry.addHandler(new LobbyHandler(objectMapper), "/ws/lobby")
                 .addHandler(new GameHandler(objectMapper), "/ws/game")
                 .setAllowedOrigins("*");

@@ -89,7 +89,8 @@ public class LobbyServiceImpl implements LobbyService {
         lobbyModel.setHostName(lobbyDTO.getHostName());
 
         lobbyModel.setNowPlayers(lobbyDTO.getNowPlayers());
-        lobbyModel.setActive(lobbyModel.getNowPlayers() != lobbyModel.getNumberOfPlayers() || lobbyModel.getNowPlayers() == 0);
+
+        lobbyModel.setActive(lobbyModel.getNowPlayers() != lobbyModel.getNumberOfPlayers() && lobbyModel.getNowPlayers() != 0);
 
         return LobbyMapper.convertToLobby(lobbyRepository.save(lobbyModel));
     }

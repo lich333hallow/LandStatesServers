@@ -14,4 +14,6 @@ public class Player {
     private String playerId;
     @Indexed(name = "name")
     private String name;
+    @Indexed(name = "color")
+    private String color;
 }

@@ -15,7 +15,7 @@ import java.util.concurrent.*;
 
 public class GameHandler extends TextWebSocketHandler {
     private final List<WebSocketSession> sessions = new CopyOnWriteArrayList<>();
-    private final List<GameModel> games = new ArrayList<>();
+    private final List<GameModel> games = new CopyOnWriteArrayList<>();
     private final ObjectMapper objectMapper;
     private final List<Gamer> gamers = new ArrayList<>();
     private final Map<String, List<ScheduledExecutorService>> playerSchedulers = new ConcurrentHashMap<>();
@@ -53,9 +53,14 @@ public class GameHandler extends TextWebSocketHandler {
                     scheduler.shutdown();
                 }
             }
+            Optional<GameModel> game = games.stream().filter(g -> g.getPlayers().stream().anyMatch(s -> s.getNumber() == gamer.getPlayer().getNumber())).findFirst();
+            if(game.isPresent() && game.get().getPlayers().isEmpty()){
+                games.removeIf(g -> g.getId().equals(game.get().getId()));
+                ScheduledExecutorService service = lobbySchedulers.remove(game.get().getId());
+                service.shutdown();
+            }
         }
 
-        games.removeIf(g -> g.getPlayers().isEmpty());
         gamers.removeIf(g -> g.getSessionId().equals(sessionId));
         sessions.remove(session);
     }
@@ -103,54 +108,130 @@ public class GameHandler extends TextWebSocketHandler {
         }
     }
 
-    private void handleNeutral(WebSocketSession session, WebSocketMessageGame message) throws IOException {
-        String lobbyId = message.getLobbyId();
-        Optional<GameModel> gameModel = games.stream().filter(g -> g.getId().equals(lobbyId)).findFirst();
-        if(gameModel.isPresent()){
+    @Override
+    public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
+        String sessionId = session.getId();
 
+        System.err.println("Transport error on session " + sessionId + ": " + exception.getMessage());
+
+        messageQueues.remove(sessionId);
+        isSending.remove(sessionId);
+
+        Optional<Gamer> gamerOpt = gamers.stream()
+                .filter(g -> g.getSessionId().equals(sessionId))
+                .findFirst();
+
+        if (gamerOpt.isPresent()) {
+            Gamer gamer = gamerOpt.get();
+            String playerName = gamer.getPlayer().getName();
+
+            List<ScheduledExecutorService> schedulers = playerSchedulers.remove(playerName);
+            if (schedulers != null) {
+                for (ScheduledExecutorService scheduler : schedulers) {
+                    scheduler.shutdownNow();
+                }
+            }
+
+            gamers.remove(gamer);
+        }
+
+        Optional<GameModel> game = games.stream().filter(g -> g.getPlayers().stream().anyMatch(s -> s.getNumber() == gamers.stream().filter(j -> j.getSessionId().equals(sessionId)).findFirst().get().getPlayer().getNumber())).findFirst();
+        if(game.isPresent() && game.get().getPlayers().isEmpty()){
+            games.removeIf(g -> g.getId().equals(game.get().getId()));
+            ScheduledExecutorService service = lobbySchedulers.remove(game.get().getId());
+            service.shutdown();
+        }
+
+        sessions.remove(session);
+
+        if (session.isOpen()) {
+            session.close(CloseStatus.SERVER_ERROR);
         }
     }
 
+    private void handleNeutral(WebSocketSession session, WebSocketMessageGame message) throws IOException {
+        String lobbyId = message.getLobbyId();
+        Optional<Gamer> gamer = gamers.stream().filter(g -> g.getSessionId().equals(session.getId())).findFirst();
+        Optional<GameModel> gameModel = games.stream().filter(g -> g.getId().equals(lobbyId)).findFirst();
+        if (gamer.isEmpty() || gameModel.isEmpty()) return;
+
+        PlayerModelInGame attacker = gamer.get().getPlayer();
+
+        State state = message.getState();
+        Optional<State> attack = attacker.getBases().stream().filter(s -> s.getId() == state.getSourceId()).findFirst();
+        if (attack.isEmpty()) return;
+
+        State attackState = attack.get();
+
+        int k = attackState.getWarriors() - state.getWarriors();
+        Random random = new Random();
+        double chance = random.nextDouble();
+        attackState.setWarriors(0);
+
+        if ((k == 0 && chance <= 0.25) || (k > 0)) {
+            attacker.getBases().add(generateNeutralState(attacker.getBases().stream().mapToInt(State::getId).max().orElse(0) + 1, k, state.getId()));
+            broadcastGameState("CAPTURED_NEUTRAL", lobbyId, attacker.getName(), attacker.getName());
+        } else {
+            broadcastGameState("FAILED", lobbyId, attacker.getName(), attacker.getName());
+        }
+    }
+
+    private State generateNeutralState(int id, int warriors, int sourceId){
+        State neutral = new State();
+        neutral.setId(id);
+        neutral.setType(0);
+        neutral.setFood(100);
+        neutral.setPeasants(0);
+        neutral.setMiners(0);
+        neutral.setWarriors(warriors);
+        neutral.setSourceId(sourceId);
+        return neutral;
+    }
+
     private void handleChangeStateType(WebSocketSession session, WebSocketMessageGame messageGame) throws IOException {
-        String lobbyId = messageGame.getLobbyId();
-        String playerName = messageGame.getPlayer().getName();
-        int stateId = messageGame.getState().getId();
-        int newType = messageGame.getState().getType();
+            String lobbyId = messageGame.getLobbyId();
+            String playerName = messageGame.getPlayer().getName();
+            int stateId = messageGame.getState().getId();
+            int newType = messageGame.getState().getType();
 
-        Optional<GameModel> gameModel = games.stream()
-                .filter(g -> g.getId().equals(lobbyId))
-                .findFirst();
+            Optional<GameModel> gameModel = games.stream()
+                    .filter(g -> g.getId().equals(lobbyId))
+                    .findFirst();
 
-        if (gameModel.isPresent()) {
+            if (gameModel.isEmpty()) {
+                session.sendMessage(new TextMessage(
+                        String.format("{\"error\":\"Lobby %s not found\"}", lobbyId)
+                ));
+                return;
+            }
+
             Optional<PlayerModelInGame> playerOpt = gameModel.get().getPlayers().stream()
                     .filter(p -> p.getName().equals(playerName))
                     .findFirst();
 
-            if (playerOpt.isPresent()) {
-                PlayerModelInGame player = playerOpt.get();
-                Optional<State> stateOpt = player.getBases().stream()
-                        .filter(s -> s.getId() == stateId)
-                        .findFirst();
-
-                if (stateOpt.isPresent()) {
-                    State state = stateOpt.get();
-                    state.setType(newType);
-                    broadcastGameState("UPDATE", lobbyId, playerName);
-                } else {
-                    session.sendMessage(new TextMessage(
-                            String.format("{\"error\":\"State with id %d not found\"}", stateId)
-                    ));
-                }
-            } else {
+            if (playerOpt.isEmpty()) {
                 session.sendMessage(new TextMessage(
                         String.format("{\"error\":\"Player %s not found\"}", playerName)
                 ));
+                return;
             }
-        } else {
-            session.sendMessage(new TextMessage(
-                    String.format("{\"error\":\"Lobby %s not found\"}", lobbyId)
-            ));
-        }
+
+            PlayerModelInGame player = playerOpt.get();
+            Optional<State> stateOpt = player.getBases().stream()
+                    .filter(s -> s.getId() == stateId)
+                    .findFirst();
+
+            if (stateOpt.isEmpty()) {
+                session.sendMessage(new TextMessage(
+                        String.format("{\"error\":\"State with id %d not found\"}", stateId)
+                ));
+                return;
+            }
+
+            State state = stateOpt.get();
+            state.setType(newType);
+
+            broadcastGameState("UPDATE_STATE", lobbyId, playerName, playerName);
     }
 
     private void handleFoodDeficit(State state, int deficit) {
@@ -181,10 +262,13 @@ public class GameHandler extends TextWebSocketHandler {
             } catch (Exception e) {
                 System.err.println("Error updating player state for player " + playerName + ": " + e.getMessage());
             }
-        }, 5, 10, TimeUnit.SECONDS);
+        }, 5, 5, TimeUnit.SECONDS);
     }
 
     private void updatePlayerState(String lobbyId, String playerName) throws IOException {
+        if (!lobbySchedulers.containsKey(lobbyId)) {
+            return;
+        }
         Optional<Gamer> gamerOpt = gamers.stream()
                 .filter(g -> {
                     boolean nameMatches = g.getPlayer().getName().equals(playerName);
@@ -206,7 +290,7 @@ public class GameHandler extends TextWebSocketHandler {
         if (!sessionActive) return;
 
         for (State state : player.getBases()) {
-            int foodProduction = (int) (state.getPeasants() * 1.15);
+            int foodProduction = state.getPeasants() * 2;
             int foodConsumption = state.getWarriors() + state.getMiners() + state.getPeasants();
             int newFood = state.getFood() + foodProduction - foodConsumption;
 
@@ -214,6 +298,8 @@ public class GameHandler extends TextWebSocketHandler {
                 handleFoodDeficit(state, Math.abs(newFood));
                 newFood = 0;
             }
+
+            player.setBalance(player.getBalance() + state.getMiners());
 
             state.setFood(newFood);
 
@@ -230,7 +316,7 @@ public class GameHandler extends TextWebSocketHandler {
             }
         }
 
-        broadcastGameState("UPDATE", lobbyId, playerName);
+        broadcastGameState("UPDATE", lobbyId, playerName, playerName);
     }
 
     private void handleJoinMessage(WebSocketSession session, WebSocketMessageGame message) throws IOException {
@@ -254,27 +340,55 @@ public class GameHandler extends TextWebSocketHandler {
             scheduleGameTimer(lobbyId, gameModel1.getGameTime());
             schedulePlayerStateUpdates(lobbyId, playerName);
 
-            broadcastGameState("CREATE", message.getLobbyId(), playerName);
+            broadcastGameState("CREATE", message.getLobbyId(), playerName, playerName);
         } else {
-            List<PlayerModelInGame> playerModelInGames = new ArrayList<>(gameModel.get().getPlayers());
-            playerModelInGames.add(message.getPlayer());
-            gameModel.get().setPlayers(playerModelInGames);
+            gameModel.get().getPlayers().add(message.getPlayer());
 
             schedulePlayerStateUpdates(lobbyId, playerName);
-            broadcastGameState("JOIN", message.getLobbyId(), playerName);
+            broadcastGameState("JOIN", message.getLobbyId(), playerName, playerName);
         }
     }
-
 
     private void handleAttack(WebSocketSession session, WebSocketMessageGame message) throws IOException {
         String lobbyId = message.getLobbyId();
         Optional<GameModel> gameModel = games.stream().filter(g -> g.getId().equals(lobbyId)).findFirst();
-        if (gameModel.isPresent()) {
+        Optional<Gamer> dGamer = gamers.stream().filter(g -> g.getPlayer().getNumber() == message.getTarget().getNumber()).findFirst();
+        Optional<Gamer> aGamer = gamers.stream().filter(g -> g.getPlayer().getNumber() == message.getPlayer().getNumber()).findFirst();
+        if(dGamer.isEmpty() || gameModel.isEmpty() || aGamer.isEmpty()) return;
 
+        PlayerModelInGame attacker = aGamer.get().getPlayer();
+        PlayerModelInGame defender = dGamer.get().getPlayer();
+        State defenderState = message.getState();
+        Optional<State> attackState = attacker.getBases().stream().filter(s -> s.getId() == defenderState.getSourceId()).findFirst();
+        if (attackState.isEmpty()) return;
+
+        State attackerState = attackState.get();
+
+        int k = defenderState.getWarriors() - attackerState.getWarriors();
+        attackerState.setWarriors(0);
+        Random random = new Random();
+        double chance = random.nextDouble();
+
+        if(k > 0 || (k == 0 && chance <= 0.75)){
+            defenderState.setWarriors(k);
+            defenderState.setSourceId(0);
+            broadcastGameState("FAILED", lobbyId, attacker.getName(), defender.getName());
+        } else {
+            defender.getBases().removeIf(s -> s.getId() == defenderState.getId());
+            defenderState.setWarriors(Math.abs(k));
+            defenderState.setSourceId(defenderState.getId());
+            defenderState.setId(attacker.getBases().stream().mapToInt(State::getId).max().orElse(0) + 1);
+            attacker.getBases().add(defenderState);
+
+            broadcastGameState("CAPTURED", lobbyId, attacker.getName(), defender.getName());
         }
     }
 
     private void scheduleGameTimer(String lobbyId, int gameTimeInSeconds) {
+        if (lobbySchedulers.containsKey(lobbyId)) {
+            return;
+        }
+
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         lobbySchedulers.put(lobbyId, scheduler);
 
@@ -288,6 +402,9 @@ public class GameHandler extends TextWebSocketHandler {
     }
 
     private void handleFinishGame(String lobbyId) {
+        if (!lobbySchedulers.containsKey(lobbyId)) {
+            return;
+        }
         games.stream()
                 .filter(g -> g.getId().equals(lobbyId))
                 .findFirst()
@@ -309,7 +426,7 @@ public class GameHandler extends TextWebSocketHandler {
                     players.forEach(player -> {
                         List<ScheduledExecutorService> schedulers = playerSchedulers.remove(player.getName());
                         if (schedulers != null) {
-                            schedulers.forEach(scheduler -> scheduler.shutdownNow());
+                            schedulers.forEach(ExecutorService::shutdownNow);
                         }
                         gamers.stream()
                                 .filter(g -> g.getPlayer().getName().equals(player.getName()))
@@ -388,7 +505,7 @@ public class GameHandler extends TextWebSocketHandler {
         });
     }
 
-    private void broadcastGameState(String type, String lobbyId, String playerName) throws IOException {
+    private void broadcastGameState(String type, String lobbyId, String playerName, String target) throws IOException {
         Optional<GameModel> gameModel = games.stream()
                 .filter(g -> g.getId().equals(lobbyId))
                 .findFirst();
@@ -397,10 +514,15 @@ public class GameHandler extends TextWebSocketHandler {
             Optional<PlayerModelInGame> playerOpt = gameModel.get().getPlayers().stream()
                     .filter(p -> p.getName().equals(playerName))
                     .findFirst();
+            Optional<PlayerModelInGame> targetOpt = target.equals(playerName)
+                    ? playerOpt
+                    : gameModel.get().getPlayers().stream()
+                    .filter(p -> p.getName().equals(target))
+                    .findFirst();
 
             if (playerOpt.isPresent()) {
                 PlayerModelInGame player = playerOpt.get();
-                GameState gameState = new GameState(type, lobbyId, player);
+                GameState gameState = new GameState(type, lobbyId, player, targetOpt.orElse(player));
                 String wsMess = objectMapper.writeValueAsString(gameState);
                 TextMessage message = new TextMessage(wsMess);
                 sendMessageToLobby(lobbyId, message);
